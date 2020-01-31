@@ -21,6 +21,8 @@
 #define BACKGROUND 0
 #define FOREGROUND 1
 
+int *BackGround;
+int top = 0;
 typedef struct token{
 	char **cmds;
 	char *infile;
@@ -28,8 +30,6 @@ typedef struct token{
 	int no_cmd;
 	int mode;
 }token;
-
-char *BuiltinStr[] = {"cd", "kill", "quit"};
 
 int cd(char **arg){ //cd
 	if(!arg[1]){
@@ -47,19 +47,27 @@ int cd(char **arg){ //cd
 	return 0;
 }
 
-int pkill(char **arg){ //kill
-	int pid, signo;
-	pid = atoi(arg[1]);
-	signo = atoi(arg[2]);
-	kill(pid, signo);
-	return 0;
-}
-
 int quit(char **arg){ //exit
+	printf("Bye!\n");
 	exit(0);
 }
 
-int (*BuiltinFunc[]) (char **) = {&cd, &pkill, &quit};
+int bg(char **arg){
+	int pid, i;
+	int index = atoi(arg[1]);
+	if(!index){
+		return -1;
+	}
+	pid = BackGround[index - 1];
+	if(kill(pid, SIGCONT) < 0){
+		perror("kill failed");
+		return -1;
+	}
+	top -= 1;
+	for(i = index - 1; i < top; i++)
+		BackGround[i] = BackGround[i + 1];
+	return 0;
+}
 
 token Process(char *str){
 	token t;
@@ -201,14 +209,20 @@ int BuiltIn(token t){
 	Parse(t.cmds[0], args);
 	if(args[0] == NULL)
 		return -1;
-	for (i = 0; i < BUILT; i++) {
-    		if (!strcmp(args[0], BuiltinStr[i])){
-			(*BuiltinFunc[i])(args);
-    			return 0;
-		}
-    	}
+	if(!strcmp(args[0], "cd")){
+		cd(args);
+		return 0;
+	}
+	if(!strcmp(args[0], "bg")){
+		bg(args);
+		return 0;
+	}
+	if(!strcmp(args[0], "quit")){
+		quit(args);
+	}
 	return -1;
 }
+
 int Execute(token t){
 	char **args = (char **)malloc(sizeof(char *) * MAX_CMDS);
 	int tmpin = dup(0);
@@ -216,7 +230,7 @@ int Execute(token t){
 	int fdin;
 	int pid;
 	int i;
-	
+	int status;
 	if(t.no_cmd == 1 && !t.infile && !t.outfile){
 		if(!BuiltIn(t)) // builtin function 
 			return 0;
@@ -283,7 +297,14 @@ int Execute(token t){
 			exit(errno);
 		}
 		else if(t.mode){
-			wait(NULL);
+			do{
+				waitpid(pid, &status, WUNTRACED | WCONTINUED);/*code to detect child is suspended; adding it's pid to BackGround; stop waiting for it to terminate*/
+				if(WIFSTOPPED(status)){
+					BackGround[top++] = pid;
+					printf("[%d]+ stopped  %s\n", top, t.cmds[i]);
+					break;
+				}
+			}while(!WIFEXITED(status) && !WIFSIGNALED(status));
 		}
 	}
 	dup2(tmpin, 0);
@@ -303,14 +324,14 @@ void PrintCurrDir(){
 }
 
 void SignalHandler(int n){
-	write(1, "\nTo exit type \"quit\"\n", 21);
-	PrintCurrDir();
-	write(1, "prompt>>", 8);
+	write(1, "\n", 1);
 }
 
 int main(){
+	
 	signal(SIGINT, SignalHandler); //ctrl^c
 	signal(SIGTSTP, SignalHandler);//ctrl^z
+	BackGround = (int *)malloc(sizeof(char) * MAX_CMDS);
 	char str[MAX_SIZE];
 	IntShell();
 	while(1){
