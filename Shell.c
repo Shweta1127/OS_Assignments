@@ -11,6 +11,7 @@
 
 #define BUILT 3
 #define DELIM " \n\t\r\a"
+#define DELIM_OP " <|>"
 
 #define MAX_CMDS 32
 #define MAX_SIZE 128
@@ -20,6 +21,9 @@
 
 #define BACKGROUND 0
 #define FOREGROUND 1
+
+#define INPUT 0
+#define OUTPUT 1
 
 int *BackGround;
 int top = 0;
@@ -69,105 +73,102 @@ int bg(char **arg){
 	return 0;
 }
 
+int InsertCMD(token *t, char *str, int pause, int stop){
+	int i, j;
+	t->cmds[t->no_cmd] = (char *)malloc(sizeof(char) * MAX_SIZE); 
+	for(i = pause, j = 0; i < stop; i++, j++){
+		t->cmds[t->no_cmd][j] = str[i];
+	}
+	t->cmds[t->no_cmd][j] = 0;
+	++t->no_cmd;
+	return 0;
+}
+
+int File(token *t, char *str, int start, int end, int type){
+	char *file = (char *)malloc(sizeof(char) * MAX_SIZE);
+	int k = 0;
+	int flag = 1;
+	while(start < end){
+		if(str[start] == 32  || str[start] == 60 || str[start] == 62){
+			if(flag){
+				start += 1;
+				continue;
+			}
+			else
+				break;
+		}
+		flag = 0;
+		file[k++] = str[start];
+		start += 1;
+	}
+	file[k] = 0;
+	file = strtok(file, DELIM);
+	if(!type)
+		t->infile = file;
+	else
+		t->outfile = file;
+	return start;
+}
+
 token Process(char *str){
 	token t;
 	t.cmds = (char **)malloc(sizeof(char *) * MAX_CMDS);
-	int i = 0, j, k, pause, no = 0, in = 0, out = 0, start;
+	int i = 0, pause;
+	int in = 0, out = 0;
 	int n = strlen(str);
-	pause = i;
 	int rflag = 0;
-	if(str[strlen(str) - 2] == '&'){
-		t.mode = BACKGROUND; 
-		str[strlen(str) - 2] = '\0';
-	}
-	else
-		t.mode = FOREGROUND;
-	for(i = 0; i < n; i++){
-		if(str[i] == 60 || str[i] == 124 || str[i] == 62){
-			rflag = 1;
-			break;
-		}
+
+	t.no_cmd = 0;
+	pause = i;
+
+	char *dummy = strdup(str);
+	char *tok = strtok(dummy, DELIM_OP);
+	tok = strtok(NULL, DELIM_OP);
+	if(tok != NULL){
+		rflag = 1;
 	}
 	if(!rflag){ // simple command
 		t.cmds[0] = str;
 		t.no_cmd = 1;
 		return t;
 	}
+
 	while(i < n){
-		start = 1;
 		switch(str[i]){
-			case 60:{ // < infile
+			case '<':{ // < infile
 				if(!out){
-					t.cmds[no] = (char *)malloc(sizeof(char) * MAX_SIZE); 
-					for(j = pause, k = 0; j < i; j++, k++){
-						t.cmds[no][k] = str[j];
-					}
-					t.cmds[no][k] = 0;
-					++i, ++no;
+					InsertCMD(&t, str, pause, i);
+					i++;
 					while(str[i] == 32)
 						i += 1;
 					pause = i;
 				}
-		
-				t.infile = (char *)malloc(sizeof(char) * MAX_SIZE);
-				for(j = 0, k = 0; i < n; j++){
-					if(str[i] == 32  || str[i] == 60){
-						if(start){
-							i += 1;
-							continue;
-						}
-						else
-							break;
-					}
-					start = 0;		
-					t.infile[k++] = str[i];
-					i += 1;
+				else{
+					i++;				
 				}
-				t.infile[k] = 0;
-				t.infile = strtok(t.infile, DELIM);
+				i = File(&t, str, i, n, INPUT);
 				in = 1;
 				break;
 			}
-			case 62:{ // > outfile
+			case '>':{ // > outfile
 				if(!in){
-					t.cmds[no] = (char *)malloc(sizeof(char) * MAX_SIZE); 
-					for(j = pause, k = 0; j < i; j++, k++){
-						t.cmds[no][k] = str[j];
-					}
-					t.cmds[no][k] = 0;
-					++i, ++no;
+					InsertCMD(&t, str, pause, i);
+					i++;
 					while(str[i] == 32)
 						i += 1;
 					pause = i;
 				}
-			
-				t.outfile = (char *)malloc(sizeof(char) * MAX_SIZE);
-				for(j = 0, k = 0; i < n; j++){
-					if(str[i] == 32 || str[i] == 62){
-						if(start){
-							i += 1;
-							continue;
-						}	
-						else
-							break;	
-					}
-					start = 0;
-					t.outfile[k++] = str[i];
-					i += 1;
+				else{
+					i++;
 				}
-				t.outfile[k] = 0;
-				t.outfile = strtok(t.outfile, DELIM);
+				i = File(&t, str, i, n, OUTPUT);
 				out = 1;
 				break;
 			}
-			case 124: {// | pipe
+			case '|': {// | pipe
 				if(!in && !out){
-					t.cmds[no] = (char *)malloc(sizeof(char) * MAX_SIZE); 
-					for(j = pause, k = 0; j < i; j++, k++){
-						t.cmds[no][k] = str[j];
-					}
-					t.cmds[no][k] = 0;
-					i += 1; ++no;
+					InsertCMD(&t, str, pause, i);
+					i++;
 					while(str[i] == 32)
 						i += 1;
 					pause = i;
@@ -177,19 +178,11 @@ token Process(char *str){
 		}
 		i += 1;
 	}
-	if(!in && !out){ // | pipe + simple
-		t.cmds[no] = (char *)malloc(sizeof(char) * MAX_SIZE); 
-		for(j = pause, k = 0; j < i; j++, k++){
-			t.cmds[no][k] = str[j];
-		}
-		t.cmds[no][k] = 0;
-		++no;
+	if(!in && !out){
+		InsertCMD(&t, str, pause, i);
 	}
-	t.no_cmd = no;
-	return t;
-		
+	return t;	
 }
-
 int Parse(char *pros, char **args){
 	char *t;
 	char *str = strdup(pros);
@@ -257,7 +250,7 @@ int Execute(token t){
 		close(fdin);
 		if(i == t.no_cmd - 1){
 			if(t.outfile){
-				fdout = open(t.outfile, O_WRONLY | O_CREAT, S_IWUSR);
+				fdout = open(t.outfile, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
 				if(fdout == -1){
 					perror("open failed");
 					return -1;
@@ -298,7 +291,11 @@ int Execute(token t){
 		}
 		else if(t.mode){
 			do{
-				waitpid(pid, &status, WUNTRACED | WCONTINUED);/*code to detect child is suspended; adding it's pid to BackGround; stop waiting for it to terminate*/
+				/*code to detect child is suspended;
+				 * adding it's pid to BackGround; 
+				 * stop waiting for it to terminate
+				 */
+				waitpid(pid, &status, WUNTRACED | WCONTINUED);
 				if(WIFSTOPPED(status)){
 					BackGround[top++] = pid;
 					printf("[%d]+ stopped  %s\n", top, t.cmds[i]);
