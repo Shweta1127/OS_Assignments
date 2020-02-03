@@ -1,5 +1,5 @@
 # Shell
 Implementation of Shell
 
-#Pthreads
+# Pthreads
 Matrix multiplication using pthreads
