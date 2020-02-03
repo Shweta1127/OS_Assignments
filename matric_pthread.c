@@ -5,7 +5,7 @@
 #define THREAD 3 
 #define MAX 32 
 
-pthread_t thread[3]; 
+pthread_t thread[THREAD]; 
 
 typedef struct matrix_size{
 	int A_row;
