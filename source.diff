@@ -1,0 +1,16 @@
+222a223,237
+> SYSCALL_DEFINE1(parent, int , pid)
+> {
+>	struct task_struct *process;
+>	for_each_process(process){
+>		if(process->pid == pid){
+>			while(process->pid > 0){
+>				printk("%d\n", process->pid)
+>				process = process->parent;
+>			}
+>			printk("\n");
+>			break;
+>		}
+>	}
+>	return 0;
+> }

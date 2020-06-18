@@ -3,7 +3,7 @@
 #include <stdlib.h> 
 #include <unistd.h>  
 #define THREAD 3 
-#define MAX 32 
+#define MAX 50 
 
 pthread_t thread[THREAD]; 
 
@@ -33,16 +33,16 @@ void *Multiplication(void *t)
 int main() 
 { 
 	int i, j; 
-	int m, n, p, q;
+	int m = MAX, n = MAX, p = MAX, q = MAX;
     	matrix_size *t = malloc(sizeof(matrix_size));
     	if(t == NULL)
 		return 1;
 	printf("input:\n");
-    	scanf("%d%d", &m, &n);
+    	//scanf("%d%d", &m, &n);
     	for(i = 0; i < m; i++)
 		for(j = 0; j < n; j++)
 	   		A[i][j] = rand() % 10;//scanf("%d", &A[i][j]);
-    	scanf("%d%d", &p, &q);
+    	//scanf("%d%d", &p, &q);
     	for(i = 0; i < p; i++)
 		for(j = 0; j < q; j++)
 	    		B[i][j] = rand() % 10; //scanf("%d", &B[i][j]);
